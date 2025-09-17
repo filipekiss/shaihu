@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/fs"
 	"os"
@@ -32,13 +33,16 @@ type Vulnerability struct {
 }
 
 func main() {
-	if len(os.Args) != 3 {
-		fmt.Fprintf(os.Stderr, "Usage: %s <compromised-packages-file> <search-directory>\n", os.Args[0])
+	var includeNodeModules = flag.Bool("node-modules", false, "Include package.json files from node_modules directories")
+	flag.Parse()
+
+	if flag.NArg() != 2 {
+		fmt.Fprintf(os.Stderr, "Usage: %s [--node-modules] <compromised-packages-file> <search-directory>\n", os.Args[0])
 		os.Exit(1)
 	}
 
-	compromisedFile := os.Args[1]
-	searchDir := os.Args[2]
+	compromisedFile := flag.Arg(0)
+	searchDir := flag.Arg(1)
 
 	compromisedPackages, err := readCompromisedPackages(compromisedFile)
 	if err != nil {
@@ -46,7 +50,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	packageJsonFiles, err := findPackageJsonFiles(searchDir)
+	packageJsonFiles, err := findPackageJsonFiles(searchDir, *includeNodeModules)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error finding package.json files: %v\n", err)
 		os.Exit(1)
@@ -118,7 +122,7 @@ func readCompromisedPackages(filename string) (map[string][]string, error) {
 	return compromised, nil
 }
 
-func findPackageJsonFiles(rootDir string) ([]string, error) {
+func findPackageJsonFiles(rootDir string, includeNodeModules bool) ([]string, error) {
 	var files []string
 
 	err := filepath.WalkDir(rootDir, func(path string, d fs.DirEntry, err error) error {
@@ -126,7 +130,7 @@ func findPackageJsonFiles(rootDir string) ([]string, error) {
 			return err
 		}
 
-		if d.IsDir() && d.Name() == "node_modules" {
+		if d.IsDir() && d.Name() == "node_modules" && !includeNodeModules {
 			return filepath.SkipDir
 		}
 
